@@ -1,18 +1,49 @@
-import express from 'express'
-import cors from 'cors'
-import { connectDB } from './config/db.js'
-import noteRoutes from './routes/note.route.js'
+import "./loadEnv.js";
+import express from "express";
+import cors from "cors";
+import { connectDB } from "./src/config/db.js";
 
-const app = express()
+const app = express();
 
-app.use(express.json())
-app.use(cors())
+const allowedOrigins = (
+  process.env.ALLOWED_DOMAINS || "http://localhost:3000"
+).split(",");
 
-app.use("/api/notes", noteRoutes)
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, 
+  })
+);
 
-const PORT = 4000
+app.use(express.json({ limit: "1gb" }));
+app.use(express.urlencoded({ limit: "1gb", extended: true }));
 
-app.listen(PORT, ()=> {
-    connectDB()
-    console.log("Server is running now!")
-})
+connectDB()
+  .then(async () => {
+    console.log("Connected to database");
+    const noteRoutes = await import("./src/routes/note.route.js");
+
+    app.use("/api/notes", noteRoutes.default);
+  })
+  .catch((err) => {
+    console.log("Error connecting to database", err);
+  });
+
+app.get("/status", (req, res) => {
+  res.json({ service: "api", status: "running" });
+});
+
+const PORT = process.env.PORT || 5001;
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}...`);
+  console.log(`You can access the application at: http://localhost:${PORT}`);
+});
